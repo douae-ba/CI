@@ -4,6 +4,7 @@ const TARGET_COLOR = "#2563eb";
 const REAL_COLOR = "#f97316";
 let scopeDeptTargets = [];
 let scopeChartMode = "percent";
+let participationChartMode = "percent";
 
 // Scopes à ne plus afficher individuellement dans le graphe "Contribution par Scope" :
 // leurs suggestions/objectifs sont regroupés dans le scope OTHER_SCOPE_NAME.
@@ -87,15 +88,24 @@ function getMergedScopeSourceNames(scopeName) {
     return scopeName === OTHER_SCOPE_NAME ? [scopeName, ...EXCLUDED_SCOPE_NAMES] : [scopeName];
 }
 
-// Liste des scopes à afficher comme barres distinctes dans le graphe par scope
-// (Innovator et Laboratory sont retirés, leurs valeurs étant fusionnées dans "Other").
+// Ids de scope correspondant à getMergedScopeSourceNames (pratique pour filtrer scopeDeptTargets).
+function getMergedScopeIds(scopeName) {
+    const sourceNames = getMergedScopeSourceNames(scopeName);
+    return scopes.filter(s => sourceNames.includes(s.nom)).map(s => s.id);
+}
+
+// Scopes à afficher (colonnes/barres) : Innovator et Laboratory sont retirés,
+// leurs valeurs étant fusionnées dans "Other".
+function getDisplayedScopes() {
+    return scopes.filter(s => !EXCLUDED_SCOPE_NAMES.includes(s.nom));
+}
+
 function getDisplayedScopeNames() {
-    return scopes.map(s => s.nom).filter(name => !EXCLUDED_SCOPE_NAMES.includes(name));
+    return getDisplayedScopes().map(s => s.nom);
 }
 
 function getScopeTargetPercent(scopeName, year, mois) {
-    const sourceNames = getMergedScopeSourceNames(scopeName);
-    const scopeIds = scopes.filter(s => sourceNames.includes(s.nom)).map(s => s.id);
+    const scopeIds = getMergedScopeIds(scopeName);
     if (scopeIds.length === 0) return 0;
 
     let scopeSum = 0;
@@ -196,8 +206,7 @@ function renderScopeStatutCharts() {
             return data.filter(s => sourceNames.includes(s.scopeName)).length;
         });
         scopeTarget = scopeNames.map(name => {
-            const sourceNames = getMergedScopeSourceNames(name);
-            const scopeIds = scopes.filter(s => sourceNames.includes(s.nom)).map(s => s.id);
+            const scopeIds = getMergedScopeIds(name);
             let sum = 0;
             scopeDeptTargets.forEach(t => {
                 if (t.year.toString() === period.year && t.mois === period.mois && scopeIds.includes(t.scopeId)) sum += t.targetCount;
@@ -267,23 +276,72 @@ function renderDepartementCharts() {
     });
 }
 
-function getObjectiveTarget(depName, yearVal, moisVal) {
+// --- Helpers pour le graphe "Objectif de Participation par Département" ---
+
+function getDepartmentHeadcount(depName) {
     const obj = departmentObjectives[depName];
-    if (!obj || yearVal === "all") return 0;
-
-    const headcount = obj.headcount || 0;
-    if (headcount === 0) return 0;
-
-    const monthLimit = moisVal === "all" ? 11 : monthOrder.indexOf(moisVal);
-    let sum = 0;
-    for (let i = 0; i <= monthLimit; i++) {
-        const m = monthOrder[i];
-        const key = yearVal + "-" + m;
-        sum += (obj.monthlyTargets && obj.monthlyTargets[key] !== undefined) ? obj.monthlyTargets[key] : 0;
-    }
-    return Math.round(sum / headcount * 100);
+    return obj ? (obj.headcount || 0) : 0;
 }
 
+function getTotalHeadcount() {
+    return departements.reduce((sum, d) => sum + getDepartmentHeadcount(d.nom), 0);
+}
+
+// Nombre de suggestions réalisées (appliquées) pour un département, selon les filtres
+// année/mois sélectionnés (gère "all" comme getTargetCountForFilters).
+function getRealizedCountForFilters(depName, yearVal, moisVal) {
+    return suggestionsData.filter(s => {
+        if (s.departementName !== depName || s.statut !== "Applique") return false;
+        if (yearVal !== "all" && (!s.dateSuggestion || new Date(s.dateSuggestion).getFullYear().toString() !== yearVal)) return false;
+        if (moisVal !== "all" && s.mois !== moisVal) return false;
+        return true;
+    }).length;
+}
+
+// Objectif Annuel_d selon les filtres : valeur de l'année sélectionnée, ou (si "all")
+// la valeur de l'année la plus récente définie pour ce département.
+function getAnnualObjectivePercentForFilters(depName, yearVal) {
+    const obj = departmentObjectives[depName];
+    if (!obj || !obj.annualTargets) return 0;
+    if (yearVal !== "all") return obj.annualTargets[yearVal] || 0;
+
+    const years = Object.keys(obj.annualTargets);
+    if (years.length === 0) return 0;
+    const latestYear = years.sort((a, b) => Number(b) - Number(a))[0];
+    return obj.annualTargets[latestYear] || 0;
+}
+
+// Participation Target_{d,m} = Objectif Annuel × (E_d / E_total)
+// L'objectif ne doit pas dépendre de ce qui a déjà été réalisé : il reste affiché
+// (en bleu) même si aucune suggestion n'a encore été faite sur la période filtrée.
+function getParticipationTargetPercent(depName, yearVal, moisVal) {
+    const totalHeadcount = getTotalHeadcount();
+    if (totalHeadcount === 0) return 0;
+
+    const annualObjectivePercent = getAnnualObjectivePercentForFilters(depName, yearVal);
+    const headcount = getDepartmentHeadcount(depName);
+
+    const value = annualObjectivePercent * (headcount / totalHeadcount);
+    return Math.round(value);
+}
+
+// Nombre de suggestions prévues (target) pour un département, selon les filtres
+// année/mois sélectionnés (gère "all" en sommant sur les mois/années concernés).
+function getTargetCountForFilters(depName, yearVal, moisVal) {
+    const obj = departmentObjectives[depName];
+    if (!obj || !obj.monthlyTargets) return 0;
+
+    let sum = 0;
+    Object.entries(obj.monthlyTargets).forEach(([key, val]) => {
+        const sepIndex = key.indexOf("-");
+        const y = key.substring(0, sepIndex);
+        const m = key.substring(sepIndex + 1);
+        const matchYear = yearVal === "all" || y === yearVal;
+        const matchMois = moisVal === "all" || m === moisVal;
+        if (matchYear && matchMois) sum += (val || 0);
+    });
+    return sum;
+}
 function getCumulativeParticipationPct(data, depName, yearVal, moisVal) {
     const obj = departmentObjectives[depName];
     const headcount = obj ? (obj.headcount || 0) : 0;
@@ -293,8 +351,7 @@ function getCumulativeParticipationPct(data, depName, yearVal, moisVal) {
         pool = pool.filter(s => s.dateSuggestion && new Date(s.dateSuggestion).getFullYear().toString() === yearVal);
     }
     if (moisVal !== "all") {
-        const idx = monthOrder.indexOf(moisVal);
-        pool = pool.filter(s => s.mois && monthOrder.indexOf(s.mois) <= idx);
+        pool = pool.filter(s => s.mois === moisVal);
     }
     const count = pool.filter(s => s.departementName === depName).length;
 
@@ -312,22 +369,37 @@ function renderObjectifsChart() {
     const yearVal = document.getElementById("filterAnneeGlobal").value;
 
     const depNames = departements.map(d => d.nom);
-    const targetData = depNames.map(name => getObjectiveTarget(name, yearVal, moisVal));
-    const realData = depNames.map(name => getCumulativeParticipationPct(suggestionsData, name, yearVal, moisVal));
+
+    let targetData, realData, formatter, targetLabel, realLabel;
+
+    if (participationChartMode === "count") {
+        const data = getFilteredData();
+        targetData = depNames.map(name => getTargetCountForFilters(name, yearVal, moisVal));
+        realData = depNames.map(name => data.filter(s => s.departementName === name).length);
+        formatter = v => v;
+        targetLabel = "Target Suggestions";
+        realLabel = "Suggestions Réalisées";
+    } else {
+        targetData = depNames.map(name => getParticipationTargetPercent(name, yearVal, moisVal));
+        realData = depNames.map(name => getCumulativeParticipationPct(suggestionsData, name, yearVal, moisVal));
+        formatter = v => v + "%";
+        targetLabel = "Target % Contribution";
+        realLabel = "% Real Contribution";
+    }
 
     destroyChart("objectifs");
     charts.objectifs = new Chart(document.getElementById("chartObjectifs"), {
         type: "bar",
         data: {
             labels: depNames, datasets: [
-                { label: "Target % Contribution", data: targetData, backgroundColor: TARGET_COLOR, borderRadius: 4 },
-                { label: "% Real Contribution", data: realData, backgroundColor: REAL_COLOR, borderRadius: 4 }
+                { label: targetLabel, data: targetData, backgroundColor: TARGET_COLOR, borderRadius: 4 },
+                { label: realLabel, data: realData, backgroundColor: REAL_COLOR, borderRadius: 4 }
             ]
         },
         options: {
             maintainAspectRatio: false,
             scales: { x: { ticks: { autoSkip: false, maxRotation: 45, minRotation: 45 } }, y: { beginAtZero: true } },
-            plugins: { legend: { position: "bottom" }, datalabels: { anchor: "end", align: "top", color: "#333", font: { weight: "bold", size: 10 }, formatter: v => v + "%" } }
+            plugins: { legend: { position: "bottom" }, datalabels: { anchor: "end", align: "top", color: "#333", font: { weight: "bold", size: 10 }, formatter } }
         }
     });
 }
@@ -433,17 +505,20 @@ function populateScopeObjTable(year, mois, readOnly) {
     document.getElementById("scopeObjPeriodLabel").textContent =
         `Objectifs pour ${monthLabel} ${year}` + (readOnly ? " (lecture seule — mois non modifiable)" : "");
 
+    const displayedScopes = getDisplayedScopes();
+
     const thead = document.getElementById("scopeObjThead");
-    thead.innerHTML = `<tr><th>Département</th>${scopes.map(s => `<th>${s.nom}</th>`).join("")}</tr>`;
+    thead.innerHTML = `<tr><th>Département</th>${displayedScopes.map(s => `<th>${s.nom}</th>`).join("")}</tr>`;
 
     const tbody = document.getElementById("scopeObjBody");
     tbody.innerHTML = "";
 
     departements.forEach(d => {
-        const cells = scopes.map(s => {
-            const existing = scopeDeptTargets.find(t =>
-                t.departementId === d.id && t.scopeId === s.id && t.year.toString() === year && t.mois === mois);
-            const val = existing ? existing.targetCount : 0;
+        const cells = displayedScopes.map(s => {
+            const scopeIds = getMergedScopeIds(s.nom);
+            const val = scopeDeptTargets
+                .filter(t => t.departementId === d.id && scopeIds.includes(t.scopeId) && t.year.toString() === year && t.mois === mois)
+                .reduce((sum, t) => sum + t.targetCount, 0);
             return `<td><input type="number" min="0" class="scopeDeptInput" data-dep="${d.id}" data-scope="${s.id}" value="${val}" style="width:55px;" ${readOnly ? "disabled" : ""}></td>`;
         }).join("");
         const tr = document.createElement("tr");
@@ -453,12 +528,12 @@ function populateScopeObjTable(year, mois, readOnly) {
 
     const totalRow = document.createElement("tr");
     totalRow.className = "scope-total-row";
-    totalRow.innerHTML = `<td style="font-weight:700;">Total</td>${scopes.map(s => `<td id="scopeTotalCount-${s.id}" style="font-weight:700;">0</td>`).join("")}`;
+    totalRow.innerHTML = `<td style="font-weight:700;">Total</td>${displayedScopes.map(s => `<td id="scopeTotalCount-${s.id}" style="font-weight:700;">0</td>`).join("")}`;
     tbody.appendChild(totalRow);
 
     const pctRow = document.createElement("tr");
     pctRow.className = "scope-pct-row";
-    pctRow.innerHTML = `<td style="font-weight:700;">%</td>${scopes.map(s => `<td id="scopeTotalPct-${s.id}" style="font-weight:700; color:#0d1b4c;">0%</td>`).join("")}`;
+    pctRow.innerHTML = `<td style="font-weight:700;">%</td>${displayedScopes.map(s => `<td id="scopeTotalPct-${s.id}" style="font-weight:700; color:#0d1b4c;">0%</td>`).join("")}`;
     tbody.appendChild(pctRow);
 
     recalcScopeTotals();
@@ -471,8 +546,9 @@ function populateScopeObjTable(year, mois, readOnly) {
 function recalcScopeTotals() {
     let grandTotal = 0;
     const perScope = {};
+    const displayedScopes = getDisplayedScopes();
 
-    scopes.forEach(s => {
+    displayedScopes.forEach(s => {
         let sum = 0;
         document.querySelectorAll(`.scopeDeptInput[data-scope="${s.id}"]`).forEach(input => {
             sum += parseInt(input.value) || 0;
@@ -481,12 +557,37 @@ function recalcScopeTotals() {
         grandTotal += sum;
     });
 
-    scopes.forEach(s => {
+    displayedScopes.forEach(s => {
         const countEl = document.getElementById(`scopeTotalCount-${s.id}`);
         const pctEl = document.getElementById(`scopeTotalPct-${s.id}`);
         if (countEl) countEl.textContent = perScope[s.id];
         if (pctEl) pctEl.textContent = (grandTotal > 0 ? Math.round(perScope[s.id] / grandTotal * 100) : 0) + "%";
     });
+}
+
+// Construit la liste des targets à envoyer au serveur : une entrée par input affiché,
+// plus des entrées à 0 pour les scopes fusionnés (Innovator, Laboratory) afin d'éviter
+// qu'ils comptent en double avec "Other" au prochain calcul.
+function buildScopeObjTargetsPayload() {
+    const targets = [];
+    document.querySelectorAll(".scopeDeptInput").forEach(input => {
+        targets.push({
+            departementId: parseInt(input.dataset.dep),
+            scopeId: parseInt(input.dataset.scope),
+            targetCount: parseInt(input.value) || 0
+        });
+    });
+
+    const excludedScopeIds = scopes.filter(s => EXCLUDED_SCOPE_NAMES.includes(s.nom)).map(s => s.id);
+    if (excludedScopeIds.length > 0) {
+        departements.forEach(d => {
+            excludedScopeIds.forEach(scopeId => {
+                targets.push({ departementId: d.id, scopeId: scopeId, targetCount: 0 });
+            });
+        });
+    }
+
+    return targets;
 }
 
 function openScopeObjModal() {
@@ -504,14 +605,7 @@ function openScopeObjModal() {
         const year = modal.dataset.year;
         const mois = modal.dataset.mois;
 
-        const targets = [];
-        document.querySelectorAll(".scopeDeptInput").forEach(input => {
-            targets.push({
-                departementId: parseInt(input.dataset.dep),
-                scopeId: parseInt(input.dataset.scope),
-                targetCount: parseInt(input.value) || 0
-            });
-        });
+        const targets = buildScopeObjTargetsPayload();
 
         await fetch('/StatistiquesSuggestions/SaveDepartementScopeObjectives', {
             method: "POST",
@@ -539,14 +633,7 @@ document.getElementById("saveScopeObjBtn").addEventListener("click", async funct
     const year = parseInt(modal.dataset.year);
     const mois = modal.dataset.mois;
 
-    const targets = [];
-    document.querySelectorAll(".scopeDeptInput").forEach(input => {
-        targets.push({
-            departementId: parseInt(input.dataset.dep),
-            scopeId: parseInt(input.dataset.scope),
-            targetCount: parseInt(input.value) || 0
-        });
-    });
+    const targets = buildScopeObjTargetsPayload();
 
     await fetch('/StatistiquesSuggestions/SaveDepartementScopeObjectives', {
         method: "POST",
@@ -692,6 +779,19 @@ document.getElementById("scopeModeCount").addEventListener("click", function () 
     this.classList.add("active");
     document.getElementById("scopeModePct").classList.remove("active");
     renderScopeStatutCharts();
+});
+
+document.getElementById("participationModePct").addEventListener("click", function () {
+    participationChartMode = "percent";
+    this.classList.add("active");
+    document.getElementById("participationModeCount").classList.remove("active");
+    renderObjectifsChart();
+});
+document.getElementById("participationModeCount").addEventListener("click", function () {
+    participationChartMode = "count";
+    this.classList.add("active");
+    document.getElementById("participationModePct").classList.remove("active");
+    renderObjectifsChart();
 });
 
 function isCurrentPeriod(year, mois) {

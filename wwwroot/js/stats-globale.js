@@ -362,10 +362,11 @@ function getCumulativeParticipationPct(data, depName, yearVal, moisValEn) {
 function renderObjectifsChart() {
     const moisVal = document.getElementById("filterMoisGlobal").value;
     const yearVal = document.getElementById("filterAnneeGlobal").value;
+    const data = getFilteredRows();
 
     const depNames = departements.map(d => d.nom);
     const targetData = depNames.map(name => getObjectiveTarget(name, yearVal, moisVal));
-    const realData = depNames.map(name => getCumulativeParticipationPct(targetRows, name, yearVal, moisVal));
+    const realData = depNames.map(name => getCumulativeParticipationPct(data, name, yearVal, moisVal));
 
     destroyChart("objectifs");
     charts.objectifs = new Chart(document.getElementById("chartObjectifs"), {
