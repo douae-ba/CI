@@ -1,0 +1,208 @@
+﻿@{
+    ViewData["Title"] = "Export / CI Plan";
+    ViewData["ActivePage"] = "export";
+    Layout = "_AppLayout";
+}
+@Html.AntiForgeryToken()
+
+<div class="page-header">
+    <div>
+        <h1>Export / CI Plan</h1>
+        <p class="breadcrumb">Orhan Automotive — Global CI Initiatives List 2026</p>
+    </div>
+    <span class="badge-count" id="entryCount">0 entrées</span>
+</div>
+
+<div class="page-body">
+    <div class="export-intro">
+        <h2 class="section-title">Export — CI Project Plan</h2>
+        <p class="section-subtitle">Configurez les fichiers source et cible, synchronisez les nouvelles lignes et exportez vers le CI Plan.</p>
+    </div>
+
+    <div class="export-grid">
+        <div class="export-card">
+    <div class="export-card-header source">
+        <div class="card-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+        </div>
+        <div>
+            <h3>Fichier Source</h3>
+            <p>Global CI Initiatives List</p>
+        </div>
+    </div>
+    <div class="export-card-body">
+        <span class="field-label">CHEMIN / NOM DU FICHIER</span>
+<input type="text" class="search-input" id="sourcePath" value="@ViewBag.LastSourcePath" placeholder="ex: \\serveur\CI\GLOBAL_CI_SUGGESTIONS_2026.xlsx">        <p class="field-hint">Ce champ est indicatif — sert de référence au chemin réseau de votre fichier.</p>
+
+        <div class="sync-box">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="sync-box-icon"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            <p>Charger le fichier Excel source pour détecter les nouvelles lignes automatiquement</p>
+            <input type="file" id="sourceFileInput" accept=".xlsx,.xls" style="display:none;">
+            <button class="btn btn-primary btn-block" id="syncBtn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                Charger &amp; Synchroniser
+            </button>
+            <p class="sync-result" id="syncResult" style="display:none;"></p>
+        </div>
+    </div>
+</div>
+
+<div class="export-card">
+    <div class="export-card-header target">
+        <div class="card-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        </div>
+        <div>
+            <h3>Fichier Cible</h3>
+            <p>CI Project Plan (protégé)</p>
+        </div>
+    </div>
+    <div class="export-card-body">
+        <span class="field-label">CHEMIN DU FICHIER CIBLE</span>
+<input type="text" class="search-input" id="targetFileName" value="@ViewBag.LastTargetPath" placeholder="ex: C:\Users\...\OneDrive - Orhan Automotive\...\CI_Project_Plan_2026.xlsx">
+<p class="field-hint">Chemin local du fichier CI Plan (synchronisé via OneDrive/SharePoint). Les suggestions sélectionnées seront ajoutées dans la feuille Morocco.</p>
+<p class="sync-result" id="exportResult" style="display:none;"></p>
+
+        <button class="btn btn-add btn-block" id="exportBtn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Exporter vers CI Plan
+        </button>
+    </div>
+</div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="exportClassifyModal">
+    <div class="modal-box" style="width: 950px;">
+        <div class="modal-header">
+            <h2>Classification avant export</h2>
+            <button class="modal-close" id="closeExportClassifyBtn">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+</button>
+        </div>
+        <div class="modal-body full-width">
+            <div style="overflow-x:auto;">
+                <table class="objectives-table" id="exportClassifyTable">
+                    <thead>
+                        <tr>
+                            <th>Initiative</th>
+                            <th>Type</th>
+                            <th>Avancement</th>
+                            <th>Statut Global</th>
+                            <th>Étape PDCA</th>
+                        </tr>
+                    </thead>
+                    <tbody id="exportClassifyBody"></tbody>
+                </table>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" id="cancelExportClassifyBtn">Annuler</button>
+            <button type="button" class="btn btn-primary" id="confirmExportBtn">Confirmer l'export</button>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script>
+        document.getElementById("syncBtn").addEventListener("click", async function () {
+            const path = document.getElementById("sourcePath").value.trim();
+            const resultEl = document.getElementById("syncResult");
+            const btn = this;
+
+            if (!path) {
+                alert("Renseigne le chemin du fichier source d'abord.");
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = "Synchronisation en cours...";
+            const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value;
+            const formData = new FormData();
+            formData.append("sourcePath", path);
+            if (token) formData.append("__RequestVerificationToken", token);
+
+            try {
+                const response = await fetch('@Url.Action("SyncFromSource", "Home")', {
+                    method: "POST",
+                    body: formData
+                });
+                const data = await response.json();
+
+                resultEl.style.display = "block";
+                if (data.success) {
+                    resultEl.textContent = `✔ ${data.created} ajoutées, ${data.updated} mises à jour, ${data.skippedProtected} protégées (modifiées manuellement, non écrasées), ${data.skipped} lignes vides ignorées sur ${data.totalRows}.` +
+    (data.errors.length ? ` ${data.errors.length} erreur(s) — voir console.` : "");
+                    if (data.errors.length) console.warn("Erreurs d'import:", data.errors);
+                    refreshEntryCount();
+                } else {
+                    resultEl.textContent = "✖ " + data.message;
+                }
+            } catch (err) {
+                resultEl.style.display = "block";
+                resultEl.textContent = "✖ Erreur réseau : " + err.message;
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Charger &amp; Synchroniser';
+            }
+        });
+
+        async function refreshEntryCount() {
+            const res = await fetch('@Url.Action("SuggestionCount", "Home")');
+            const data = await res.json();
+            document.getElementById("entryCount").textContent = data.count + " entrées";
+        }
+        refreshEntryCount();
+
+        document.getElementById("exportBtn").addEventListener("click", async function () {
+    const path = document.getElementById("targetFileName").value.trim();
+    const resultEl = document.getElementById("exportResult");
+    const btn = this;
+
+    if (!path) {
+        alert("Renseigne le chemin du fichier cible d'abord.");
+        return;
+    }
+
+    const selectedIds = JSON.parse(localStorage.getItem("selectedSuggestionIds") || "[]");
+    if (selectedIds.length === 0) {
+        alert("Aucune suggestion sélectionnée. Va dans Initiatives, coche les lignes voulues, puis reviens ici.");
+        return;
+    }
+
+    btn.disabled = true;
+    const originalHtml = btn.innerHTML;
+    btn.textContent = "Export en cours...";
+
+    const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value;
+    const formData = new FormData();
+    formData.append("targetPath", path);
+    formData.append("idsJson", JSON.stringify(selectedIds));
+    if (token) formData.append("__RequestVerificationToken", token);
+
+    try {
+        const response = await fetch('@Url.Action("ExportToTarget", "Home")', {
+            method: "POST",
+            body: formData
+        });
+        const data = await response.json();
+
+        resultEl.style.display = "block";
+        if (data.success) {
+            resultEl.textContent = `✔ ${data.exported} initiative(s) exportée(s) vers le CI Plan.` +
+                (data.errors.length ? ` ${data.errors.length} erreur(s) — voir console.` : "");
+            if (data.errors.length) console.warn("Erreurs d'export:", data.errors);
+        } else {
+            resultEl.textContent = "✖ " + (data.message || (data.errors && data.errors.join(", ")) || "Erreur inconnue.");
+        }
+    } catch (err) {
+        resultEl.style.display = "block";
+        resultEl.textContent = "✖ Erreur réseau : " + err.message;
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+    }
+});
+    </script>
+}

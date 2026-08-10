@@ -1,0 +1,82 @@
+* {
+    box-sizing: border-box;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    font-family: 'Segoe UI', Arial, sans-serif;
+}
+
+.app-layout {
+    display: flex;
+    height: 100vh;
+}
+
+.main-content {
+    flex-grow: 1;
+    background-color: #f4f6fb;
+    overflow-y: auto;
+    height: 100vh;
+}
+
+.page-header {
+    background-color: white;
+    padding: 20px 30px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #e2e5ee;
+}
+
+    .page-header h1 {
+        margin: 0;
+        color: #0d1b4c;
+        font-size: 20px;
+    }
+
+    .page-header .breadcrumb {
+        margin: 4px 0 0 0;
+        color: #8b93b8;
+        font-size: 13px;
+    }
+
+.badge-count {
+    background-color: #eef0f7;
+    color: #0d1b4c;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.page-body {
+    padding: 30px 30px 30px 45px;
+}
+
+.section-title {
+    font-size: 18px;
+    color: #0d1b4c;
+    margin: 0 0 4px 0;
+}
+
+.section-subtitle {
+    color: #8b93b8;
+    font-size: 13px;
+    margin: 0;
+}
+
+.section-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.section-header-actions {
+    display: flex;
+    gap: 10px;
+}

@@ -1,0 +1,84 @@
+@model LoginViewModel
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Connexion - Orhan Automotive</title>
+<link rel="stylesheet" href="~/css/style.css">
+</head>
+<body>
+  <div class="shell">
+    <div class="brand-panel">
+      <div class="brand-logo-wrap">
+        <img src="~/assets/logo.png" alt="Orhan Automotive">
+      </div>
+      <div class="brand-copy">
+        <h2>Portail de gestion des&nbsp;initiatives CI</h2>
+        <p>Suivez, priorisez et pilotez les actions d'amélioration continue de l'atelier en un seul endroit.</p>
+      </div>
+      <div class="brand-footer">&copy; 2026 Orhan Automotive &mdash; Tous droits réservés</div>
+    </div>
+
+    <div class="form-panel">
+      <div class="form-header">
+        <span class="eyebrow">Espace collaborateur</span>
+        <h1>Connexion</h1>
+        <p>Accédez à votre espace de suivi CI</p>
+      </div>
+
+      <form asp-controller="Account" asp-action="Login" method="post">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="returnUrl" value="@ViewData["ReturnUrl"]" />
+
+        <div class="field">
+          <label asp-for="Username">Nom d'utilisateur</label>
+          <div class="input-wrap">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <input asp-for="Username" placeholder="Entrez votre nom d'utilisateur" autocomplete="username">
+          </div>
+          <span asp-validation-for="Username" class="field-error"></span>
+        </div>
+
+        <div class="field">
+          <label asp-for="Password">Mot de passe</label>
+          <div class="input-wrap password">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <input asp-for="Password" type="password" placeholder="Entrez votre mot de passe" autocomplete="current-password">
+            <button type="button" class="toggle-pw" id="togglePw" aria-label="Afficher le mot de passe">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+          <span asp-validation-for="Password" class="field-error"></span>
+        </div>
+
+        <div class="row-between">
+          <label class="remember"><input asp-for="RememberMe"> Se souvenir de moi</label>
+        </div>
+
+        @if (!ViewData.ModelState.IsValid)
+        {
+            <div class="error-msg show">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                <span>@Html.ValidationSummary(true, "", new { @class = "" })</span>
+            </div>
+        }
+
+        <button type="submit" class="submit">
+          <span>Se connecter</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+<script>
+  document.getElementById('togglePw').addEventListener('click', () => {
+    const pw = document.getElementById('Password');
+    pw.type = pw.type === 'password' ? 'text' : 'password';
+  });
+</script>
+</body>
+</html>

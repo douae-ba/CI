@@ -1,0 +1,247 @@
+@{
+    ViewData["Title"] = "Initiatives";
+    ViewData["ActivePage"] = "initiatives";
+    Layout = "_AppLayout";
+}
+@Html.AntiForgeryToken()
+
+<div class="page-header">
+    <div>
+        <h1>Initiatives</h1>
+        <p class="breadcrumb">Orhan Automotive — Global CI Initiatives List 2026</p>
+    </div>
+    <span class="badge-count" id="entryCount">0 entrées</span>
+</div>
+
+<div class="page-body">
+
+    <div class="section-header-row">
+        <div>
+            <h2 class="section-title">Liste des Initiatives</h2>
+            <p class="section-subtitle" id="sectionSubtitle">Global Continuous Improvement — 0 entrées</p>
+        </div>
+        <div class="section-header-actions">
+            <button class="btn btn-add" id="openAddModalBtn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Ajouter
+            </button>
+        </div>
+    </div>
+
+    <div class="filters-bar">
+        <div class="search-input-wrap">
+            <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" class="search-input" id="filterSearch" placeholder="Rechercher par description, N°, leader ou date...">
+        </div>
+        <select class="select-input" id="filterYear"><option value="all">Toutes les années</option></select>
+
+        <select class="select-input" id="filterDepartement">
+            <option value="all">Département</option>
+            @foreach (Departement d in ViewBag.Departements)
+            {
+                <option value="@d.Id">@d.Nom</option>
+            }
+        </select>
+
+        <select class="select-input" id="filterScope">
+            <option value="all">Scope</option>
+            @foreach (Scope s in ViewBag.Scopes)
+            {
+                <option value="@s.Id">@s.Nom</option>
+            }
+        </select>
+
+        <select class="select-input" id="filterMois">
+            <option value="all">Mois</option>
+            @foreach (Mois m in ViewBag.MoisList)
+            {
+                <option value="@m">@m.GetDisplayName()</option>
+            }
+        </select>
+
+        <select class="select-input" id="filterStatut">
+            <option value="all">Statut</option>
+            @foreach (StatutInitiative st in ViewBag.Statuts)
+            {
+                <option value="@st">@st.GetDisplayName()</option>
+            }
+        </select>
+
+        <select class="select-input" id="filterKaizen">
+            <option value="all">Kaizen</option>
+            <option value="true">Oui</option>
+            <option value="false">Non</option>
+        </select>
+    </div>
+
+    <div class="data-table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th><input type="checkbox" id="selectAllCheckbox"></th>
+                    <th>Plant</th>
+                    <th>N° Suggestion</th>
+                    <th>Date</th>
+                    <th>Scope</th>
+                    <th>Zone / Ligne</th>
+                    <th>Situation actuelle</th>
+                    <th>Description</th>
+                    <th>Département</th>
+                    <th>Leader</th>
+                    <th>Statut</th>
+                    <th>Date mise en œuvre</th>
+                    <th>Saving €</th>
+                    <th>N° Kaizen</th>
+                    <th>Mois</th>
+                    <th>Kaizen</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody id="suggestionsTableBody"></tbody>
+        </table>
+    </div>
+    <div class="pagination-bar">
+    <div class="pagination-info" id="paginationInfo"></div>
+    <div class="pagination-controls">
+        <select class="select-input" id="pageSizeSelect">
+            <option value="25">25 / page</option>
+            <option value="50">50 / page</option>
+            <option value="100">100 / page</option>
+        </select>
+        <button class="btn btn-secondary btn-sm" id="prevPageBtn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <span class="pagination-page" id="pageIndicator">Page 1 / 1</span>
+        <button class="btn btn-secondary btn-sm" id="nextPageBtn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+    </div>
+</div>
+
+</div>
+
+<div class="modal-overlay" id="addModal">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h2 id="modalTitle">Nouvelle Initiative</h2>
+            <button class="modal-close" id="closeModalBtn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        <form id="addSuggestionForm">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Plant</label>
+                    <input type="text" id="formPlant" value="Morocco">
+                </div>
+                <div class="form-group">
+                    <label>Suggestion Date</label>
+                    <input type="date" id="formDateSuggestion">
+                </div>
+                <div class="form-group">
+                    <label>Implementation Date</label>
+                    <input type="date" id="formDateMiseEnOeuvre">
+                </div>
+                <div class="form-group">
+                    <label>Suggestion Scope</label>
+                    <select id="formScope">
+                        @foreach (Scope s in ViewBag.Scopes)
+                        {
+                            <option value="@s.Id">@s.Nom</option>
+                        }
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Departement</label>
+                    <select id="formDepartement">
+                        @foreach (Departement d in ViewBag.Departements)
+                        {
+                            <option value="@d.Id">@d.Nom</option>
+                        }
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Suggestion Leader</label>
+                    <input type="text" id="formResponsable">
+                </div>
+                <div class="form-group">
+                    <label>Month</label>
+                    <select id="formMois">
+                        <option value="">—</option>
+                        @foreach (Mois m in ViewBag.MoisList)
+                        {
+                            <option value="@m">@m.GetDisplayName()</option>
+                        }
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Status</label>
+                    <select id="formStatut">
+                        @foreach (StatutInitiative st in ViewBag.Statuts)
+                        {
+                            <option value="@st">@st.GetDisplayName()</option>
+                        }
+                    </select>
+                </div>
+                <div class="form-group span-2">
+                    <label>Implementation Area/Line</label>
+                    <input type="text" id="formZoneLigne">
+                </div>
+                <div class="form-group">
+                    <label>Saving €</label>
+                    <input type="number" id="formEconomies" value="0">
+                </div>
+                <div class="form-group">
+                    <label>Kaizen YES/NO</label>
+                    <select id="formKaizen">
+                        <option value="false">No</option>
+                        <option value="true">Yes</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Kaizen Number (If there is a profit)</label>
+                    <input type="text" id="formKaizenNumber">
+                </div>
+                <div class="form-group span-2">
+                    <label>Current Situation</label>
+                    <textarea id="formSituation"></textarea>
+                </div>
+                <div class="form-group span-2">
+                    <label>Suggestions Description</label>
+                    <textarea id="formDescription"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="cancelModalBtn">Annuler</button>
+                <button type="submit" class="btn btn-add">Enregistrer</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="modal-overlay" id="confirmDeleteModal">
+    <div class="modal-box modal-box-small">
+        <div class="modal-header modal-header-warning">
+            <h2>Confirmer la suppression</h2>
+            <button class="modal-close" id="closeConfirmDeleteBtn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        <div class="modal-body full-width confirm-body">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="confirm-icon"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+            <p>Cette initiative sera définitivement supprimée. Cette action est irréversible.</p>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" id="cancelConfirmDeleteBtn">Annuler</button>
+            <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Supprimer</button>
+        </div>
+    </div>
+</div>
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/initiatives.css">
+}
+
+@section Scripts {
+    <script src="~/js/suggestions.js"></script>
+}

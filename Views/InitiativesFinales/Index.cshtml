@@ -1,0 +1,77 @@
+@{
+    ViewData["Title"] = "Initiatives Finales";
+    ViewData["ActivePage"] = "initiatives-finales";
+    Layout = "_AppLayout";
+}
+
+<div class="page-header">
+    <div>
+        <h1>Initiatives Finales</h1>
+        <p class="breadcrumb">Orhan Automotive — Global CI Initiatives List 2026</p>
+    </div>
+    <span class="badge-count" id="entryCount">0 entrées</span>
+</div>
+
+<div class="page-body">
+
+    <div class="section-header-row">
+        <div>
+            <h2 class="section-title">Initiatives Finales</h2>
+            <p class="section-subtitle">Sélection retenue depuis la page Initiatives, prête pour export.</p>
+        </div>
+    </div>
+
+    <div class="stat-box" id="selectionSummaryBox">
+        <div class="stat-row">
+            <span>Initiatives sélectionnées</span>
+            <span class="stat-value" id="selectedCount">0</span>
+        </div>
+        <div class="stat-row">
+            <span>Total des économies</span>
+            <span class="stat-value" id="selectedTotal">€ 0</span>
+        </div>
+    </div>
+
+    <div id="emptyState" class="empty-state-card">
+        <div class="empty-state-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        </div>
+        <p class="empty-state-title">Aucune initiative sélectionnée</p>
+        <p class="empty-state-text">Va dans la page Initiatives, coche les lignes souhaitées — elles apparaîtront ici.</p>
+    </div>
+
+    <div class="data-table-container" id="finalTableContainer" style="display:none;">
+        <table>
+            <thead>
+                <tr>
+                    <th>Plant</th>
+                    <th>N° Suggestion</th>
+                    <th>Date</th>
+                    <th>Scope</th>
+                    <th>Zone / Ligne</th>
+                    <th>Situation actuelle</th>
+                    <th>Description</th>
+                    <th>Département</th>
+                    <th>Leader</th>
+                    <th>Statut</th>
+                    <th>Date mise en œuvre</th>
+                    <th>Saving €</th>
+                    <th>N° Kaizen</th>
+                    <th>Mois</th>
+                    <th>Kaizen</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody id="finalTableBody"></tbody>
+        </table>
+    </div>
+
+</div>
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/initiatives-finales.css">
+}
+
+@section Scripts {
+    <script src="~/js/suggestions-finales.js"></script>
+}
