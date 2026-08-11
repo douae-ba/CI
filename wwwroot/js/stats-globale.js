@@ -11,6 +11,15 @@ const ENGLISH_TO_FRENCH_MOIS = {
 
 const TYPE_MAP = { "Quick Kaizen": "Kaizen", "A3 Kaizen": "A3", "TIE Kaizen": "VAVE" };
 
+// Normalise une valeur texte issue du fichier Excel pour la comparaison (espaces, casse, accents).
+// Le fichier cible est rempli manuellement et peut contenir des variantes de casse
+// ("Logistic" / "logistic", "Cost Reduction" / "cost reduction"...) qui, comparées en égalité
+// stricte, faisaient disparaître silencieusement des lignes des tableaux/graphes.
+function normStr(s) {
+    return (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
+}
+const normDept = normStr;
+
 Chart.register(ChartDataLabels);
 let charts = {};
 function destroyChart(key) { if (charts[key]) charts[key].destroy(); }
@@ -89,10 +98,10 @@ function initFilters() {
         [["Quick Kaizen", "Kaizen"], ["A3 Kaizen", "A3"], ["TIE Kaizen", "VAVE"]], true, "Tous les types");
 
     fillSelect(document.getElementById("filterDelay"),
-        [["No delayed", "Pas de retard"], ["Delayed", "En retard"]], true, "Tous (retard)");
+        [["No delayed", "Not delayed"], ["Delayed", "Delayed"]], true, "Tous (retard)");
 
     fillSelect(document.getElementById("filterCompletion"),
-        [["Completed", "Terminé"], ["Ongoing", "En cours"]], true, "Toutes (avancement)");
+        [["Completed", "Completed"], ["Ongoing", "Ongoing"]], true, "Toutes (avancement)");
 
     const pdcaValues = [...new Set(targetRows.map(r => r.currentStatus).filter(Boolean))].sort();
     fillSelect(document.getElementById("filterPdca"), pdcaValues.map(v => [v, v]), true, "Toutes les étapes");
@@ -117,9 +126,9 @@ function getFilteredRows() {
     const year = document.getElementById("filterAnneeGlobal").value;
 
     return targetRows.filter(r => {
-        const matchType = type === "all" || r.improvementType === type;
-        const matchDelay = delay === "all" || r.delayStatus === delay;
-        const matchCompletion = completion === "all" || r.closureStatus === completion;
+        const matchType = type === "all" || normStr(r.improvementType) === normStr(type);
+        const matchDelay = delay === "all" || normStr(r.delayStatus) === normStr(delay);
+        const matchCompletion = completion === "all" || normStr(r.closureStatus) === normStr(completion);
         const matchPdca = pdca === "all" || r.currentStatus === pdca;
         const matchMois = mois === "all" || r.registerMonth === mois;
         const matchYear = year === "all" || (r.registerDate && new Date(r.registerDate).getFullYear().toString() === year);
@@ -169,9 +178,9 @@ function getScopeTargetPercent(scopeName, year, mois) {
 function updateKPIs() {
     const data = getFilteredRows();
     const total = data.length;
-    const kaizenCount = data.filter(r => r.improvementType === "Quick Kaizen").length;
-    const a3Count = data.filter(r => r.improvementType === "A3 Kaizen").length;
-    const vaveCount = data.filter(r => r.improvementType === "TIE Kaizen").length;
+    const kaizenCount = data.filter(r => normStr(r.improvementType) === normStr("Quick Kaizen")).length;
+    const a3Count = data.filter(r => normStr(r.improvementType) === normStr("A3 Kaizen")).length;
+    const vaveCount = data.filter(r => normStr(r.improvementType) === normStr("TIE Kaizen")).length;
 
     document.getElementById("entryCount").textContent = targetRows.length + " entrées";
     document.getElementById("kpiKaizenCount").textContent = kaizenCount;
@@ -191,7 +200,7 @@ function renderKaizenTable() {
     thead.innerHTML = `<tr>
         <th>Département</th>
         <th># Kaizens</th>
-        <th># Suggestions</th>
+        <th># VAVE</th>
         ${scopeNames.map(sc => `<th># Kaizen ${sc}</th>`).join("")}
         <th># A3</th>
     </tr>`;
@@ -201,28 +210,29 @@ function renderKaizenTable() {
 
     const scopeTotals = {};
     scopeNames.forEach(sc => scopeTotals[sc] = 0);
-    let totalKaizens = 0, totalSuggestions = 0, totalA3 = 0;
+    let totalKaizens = 0, totalVave = 0, totalA3 = 0;
 
     depNames.forEach(depName => {
-        const rows = data.filter(r => r.department === depName);
-        const kaizenRows = rows.filter(r => r.improvementType === "Quick Kaizen");
-        const a3Count = rows.filter(r => r.improvementType === "A3 Kaizen").length;
+        const rows = data.filter(r => normDept(r.department) === normDept(depName));
+        const kaizenRows = rows.filter(r => normStr(r.improvementType) === normStr("Quick Kaizen"));
+        const a3Count = rows.filter(r => normStr(r.improvementType) === normStr("A3 Kaizen")).length;
+        const vaveCount = rows.filter(r => normStr(r.improvementType) === normStr("TIE Kaizen")).length;
 
         const scopeCells = scopeNames.map(sc => {
-            const count = kaizenRows.filter(r => r.attackedLosses === sc).length;
+            const count = kaizenRows.filter(r => normStr(r.attackedLosses) === normStr(sc)).length;
             scopeTotals[sc] += count;
             return `<td>${count}</td>`;
         }).join("");
 
         totalKaizens += kaizenRows.length;
-        totalSuggestions += rows.length;
+        totalVave += vaveCount;
         totalA3 += a3Count;
 
         const tr = document.createElement("tr");
         tr.innerHTML = `
             <td>${depName}</td>
             <td>${kaizenRows.length}</td>
-            <td>${rows.length}</td>
+            <td>${vaveCount}</td>
             ${scopeCells}
             <td>${a3Count}</td>
         `;
@@ -234,7 +244,7 @@ function renderKaizenTable() {
     totalRow.innerHTML = `
         <td style="font-weight:700;">Total</td>
         <td style="font-weight:700;">${totalKaizens}</td>
-        <td style="font-weight:700;">${totalSuggestions}</td>
+        <td style="font-weight:700;">${totalVave}</td>
         ${scopeNames.map(sc => `<td style="font-weight:700;">${scopeTotals[sc]}</td>`).join("")}
         <td style="font-weight:700;">${totalA3}</td>
     `;
@@ -255,16 +265,27 @@ function renderKaizenTable() {
     tbody.appendChild(pctRow);
 }
 
+// Libellé du type actuellement sélectionné, utilisé pour les titres des graphes.
+// "Tous les types" -> "Kaizen & A3/VAVE" (cohérent avec le titre du tableau).
+function getSelectedTypeLabel() {
+    const type = document.getElementById("filterTypeGlobal").value;
+    return TYPE_MAP[type] || "Kaizen & A3/VAVE";
+}
+
 function renderScopeStatutCharts() {
     const data = getFilteredRows();
     const total = data.length;
     const period = getEffectivePeriod();
 
+    const typeLabel = getSelectedTypeLabel();
+    document.getElementById("scopeChartTitleGlobal").textContent = typeLabel + " par Scope";
+    document.getElementById("statutChartTitleGlobal").textContent = typeLabel + " par Statut";
+
     const scopeNames = scopes.map(s => s.nom);
     let scopeReal, scopeTarget;
 
     if (scopeChartMode === "count") {
-        scopeReal = scopeNames.map(name => data.filter(r => r.attackedLosses === name).length);
+        scopeReal = scopeNames.map(name => data.filter(r => normStr(r.attackedLosses) === normStr(name)).length);
         scopeTarget = scopeNames.map(name => {
             const scopeObj = scopes.find(s => s.nom === name);
             if (!scopeObj) return 0;
@@ -275,7 +296,7 @@ function renderScopeStatutCharts() {
             return sum;
         });
     } else {
-        scopeReal = scopeNames.map(name => total ? Math.round(data.filter(r => r.attackedLosses === name).length / total * 100) : 0);
+        scopeReal = scopeNames.map(name => total ? Math.round(data.filter(r => normStr(r.attackedLosses) === normStr(name)).length / total * 100) : 0);
         scopeTarget = scopeNames.map(name => getScopeTargetPercent(name, period.year, period.mois));
     }
     const scopeFormatter = scopeChartMode === "count" ? (v => v) : (v => v + "%");
@@ -296,21 +317,20 @@ function renderScopeStatutCharts() {
         }
     });
 
-    const closureLabels = ["Completed", "Ongoing"];
-    const statutDisplay = ["Applied", "Not Applied"];
-    const closureReal = closureLabels.map(v => total ? Math.round(data.filter(r => r.closureStatus === v).length / total * 100) : 0);
+    const delayLabels = ["No delayed", "Delayed"];
+    const delayReal = delayLabels.map(v => total ? Math.round(data.filter(r => normStr(r.delayStatus) === normStr(v)).length / total * 100) : 0);
 
     const appliqueCount = getStatutTargetCount(period.year, period.mois);
     const appliqueTargetPct = total > 0 ? Math.round(appliqueCount / total * 100) : 0;
-    const closureTarget = [appliqueTargetPct, 0];
+    const delayTarget = [appliqueTargetPct, 0];
 
     destroyChart("statut");
     charts.statut = new Chart(document.getElementById("chartParStatut"), {
         type: "bar",
         data: {
-            labels: statutDisplay, datasets: [
-                { label: "Target % Contribution", data: closureTarget, backgroundColor: TARGET_COLOR, borderRadius: 4 },
-                { label: "% Real Contribution", data: closureReal, backgroundColor: REAL_COLOR, borderRadius: 4 }
+            labels: delayLabels, datasets: [
+                { label: "Target % Contribution", data: delayTarget, backgroundColor: TARGET_COLOR, borderRadius: 4 },
+                { label: "% Real Contribution", data: delayReal, backgroundColor: REAL_COLOR, borderRadius: 4 }
             ]
         },
         options: {
@@ -350,7 +370,7 @@ function getCumulativeParticipationPct(data, depName, yearVal, moisValEn) {
         const idx = monthOrder.indexOf(moisValEn);
         pool = pool.filter(r => r.registerMonth && monthOrder.indexOf(r.registerMonth) <= idx);
     }
-    const count = pool.filter(r => r.department === depName).length;
+    const count = pool.filter(r => normDept(r.department) === normDept(depName)).length;
 
     if (headcount === 0) {
         const total = pool.length;
@@ -397,7 +417,7 @@ function renderEconomiesCharts() {
     });
 
     const depNames = departements.map(d => d.nom);
-    const byDept = depNames.map(name => data.filter(r => r.department === name).reduce((sum, r) => sum + Number(r.totalSaving || 0), 0));
+    const byDept = depNames.map(name => data.filter(r => normDept(r.department) === normDept(name)).reduce((sum, r) => sum + Number(r.totalSaving || 0), 0));
     destroyChart("economiesDepartement");
     charts.economiesDepartement = new Chart(document.getElementById("chartEconomiesDepartement"), {
         type: "bar",

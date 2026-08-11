@@ -99,7 +99,8 @@ using (var scope = app.Services.CreateScope())
         "Logistic",
         "Maintenance",
         "Production",
-        "QHSE"
+        "QHSE",
+        "Quality"
     };
 
     foreach (var name in departementsToSeed)
