@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using CI.Data;
+using CI.Models;
 using CI.Services;
 
 namespace CI.Controllers
@@ -40,20 +41,52 @@ namespace CI.Controllers
                 try
                 {
                     var cached = TargetStatsCache.TryGet(path);
+                    List<TargetRow> rows;
+
                     if (cached != null)
                     {
-                        allRows.AddRange(cached);
+                        rows = cached;
                     }
                     else
                     {
-                        var freshRows = _statsService.GetRows(path);
-                        TargetStatsCache.Set(path, freshRows);
-                        allRows.AddRange(freshRows);
+                        rows = _statsService.GetRows(path);
+                        TargetStatsCache.Set(path, rows);
+
+                        // Sauvegarde/rafraîchit la copie de secours en base à chaque lecture réussie du fichier
+                        await BackupToDatabase(path, rows);
                     }
+
+                    allRows.AddRange(rows);
                 }
                 catch (Exception ex)
                 {
-                    warnings.Add($"{path} : {ex.Message}");
+                    // Fichier introuvable ou illisible -> on bascule sur la dernière copie connue en base
+                    var backupRows = await _db.TargetRecords
+                        .Where(t => t.SourceFilePath == path)
+                        .ToListAsync();
+
+                    if (backupRows.Any())
+                    {
+                        warnings.Add($"{path} : fichier inaccessible ({ex.Message}) — affichage de la dernière copie enregistrée.");
+                        allRows.AddRange(backupRows.Select(t => new TargetRow
+                        {
+                            Plant = t.Plant,
+                            SuggestionNumber = t.SuggestionNumber,
+                            RegisterDate = t.RegisterDate,
+                            RegisterMonth = t.RegisterMonth,
+                            ImprovementType = t.ImprovementType,
+                            Department = t.Department,
+                            AttackedLosses = t.AttackedLosses,
+                            DelayStatus = t.DelayStatus,
+                            CurrentStatus = t.CurrentStatus,
+                            ClosureStatus = t.ClosureStatus,
+                            TotalSaving = t.TotalSaving
+                        }));
+                    }
+                    else
+                    {
+                        warnings.Add($"{path} : {ex.Message} (aucune copie de secours disponible en base)");
+                    }
                 }
             }
 
@@ -73,6 +106,33 @@ namespace CI.Controllers
             });
 
             return Json(new { success = true, rows = mapped, warnings });
+        }
+
+        private async Task BackupToDatabase(string path, List<TargetRow> rows)
+        {
+            var existing = _db.TargetRecords.Where(t => t.SourceFilePath == path);
+            _db.TargetRecords.RemoveRange(existing);
+
+            foreach (var r in rows)
+            {
+                _db.TargetRecords.Add(new TargetRecord
+                {
+                    SourceFilePath = path,
+                    Plant = r.Plant,
+                    SuggestionNumber = r.SuggestionNumber,
+                    RegisterDate = r.RegisterDate,
+                    RegisterMonth = r.RegisterMonth,
+                    ImprovementType = r.ImprovementType,
+                    Department = r.Department,
+                    AttackedLosses = r.AttackedLosses,
+                    DelayStatus = r.DelayStatus,
+                    CurrentStatus = r.CurrentStatus,
+                    ClosureStatus = r.ClosureStatus,
+                    TotalSaving = r.TotalSaving
+                });
+            }
+
+            await _db.SaveChangesAsync();
         }
     }
 }

@@ -16,11 +16,12 @@ namespace CI.Data
         public DbSet<DepartementAnnualObjective> DepartementAnnualObjectives { get; set; }
         public DbSet<DepartementMonthlyObjective> DepartementMonthlyObjectives { get; set; }
         public DbSet<DepartementScopeObjective> DepartementScopeObjectives { get; set; }
+        public DbSet<TargetRecord> TargetRecords { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.Entity<Suggestion>()
-    .HasIndex(s => s.NumeroSuggestion); // plus unique — doublons possibles (erreurs de saisie côté Excel)
+                .HasIndex(s => s.NumeroSuggestion); 
 
             modelBuilder.Entity<Suggestion>()
                 .HasIndex(s => s.SourceRowNo)
@@ -39,8 +40,11 @@ namespace CI.Data
             modelBuilder.Entity<DepartementMonthlyObjective>().HasIndex(m => new { m.DepartementId, m.Year, m.Mois }).IsUnique();
 
             modelBuilder.Entity<DepartementScopeObjective>()
-    .HasIndex(o => new { o.DepartementId, o.ScopeId, o.Year, o.Mois })
-    .IsUnique();
+                .HasIndex(o => new { o.DepartementId, o.ScopeId, o.Year, o.Mois })
+                .IsUnique();
+
+            modelBuilder.Entity<TargetRecord>()
+                .HasIndex(t => new { t.SourceFilePath, t.SuggestionNumber });
 
             base.OnModelCreating(modelBuilder);
         }

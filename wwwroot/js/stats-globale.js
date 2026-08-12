@@ -11,6 +11,16 @@ const ENGLISH_TO_FRENCH_MOIS = {
 
 const TYPE_MAP = { "Quick Kaizen": "Kaizen", "A3 Kaizen": "A3", "TIE Kaizen": "VAVE" };
 
+// Scopes à ne plus afficher individuellement : leurs valeurs sont fusionnées dans "Other".
+const EXCLUDED_SCOPE_NAMES = ["Innovator", "Laboratory"];
+const OTHER_SCOPE_NAME = "Other";
+function getDisplayedScopeNames() {
+    return scopes.map(s => s.nom).filter(name => !EXCLUDED_SCOPE_NAMES.includes(name));
+}
+function getMergedScopeSourceNames(scopeName) {
+    return scopeName === OTHER_SCOPE_NAME ? [scopeName, ...EXCLUDED_SCOPE_NAMES] : [scopeName];
+}
+
 // Normalise une valeur texte issue du fichier Excel pour la comparaison (espaces, casse, accents).
 // Le fichier cible est rempli manuellement et peut contenir des variantes de casse
 // ("Logistic" / "logistic", "Cost Reduction" / "cost reduction"...) qui, comparées en égalité
@@ -38,6 +48,8 @@ let scopeObjectives = {};
 let scopeDeptTargets = [];
 let statutObjectives = [];
 let scopeChartMode = "percent";
+let statutChartMode = "percent";
+let participationChartMode = "percent";
 
 async function loadAll() {
     const [dataRes, filtersRes, objRes] = await Promise.all([
@@ -159,9 +171,14 @@ function getStatutTargetCount(year, mois) {
     return entry ? entry.targetCount : 0;
 }
 
+function getMergedScopeIds(scopeName) {
+    const sourceNames = getMergedScopeSourceNames(scopeName);
+    return scopes.filter(s => sourceNames.includes(s.nom)).map(s => s.id);
+}
+
 function getScopeTargetPercent(scopeName, year, mois) {
-    const scope = scopes.find(s => s.nom === scopeName);
-    if (!scope) return 0;
+    const scopeIds = getMergedScopeIds(scopeName);
+    if (scopeIds.length === 0) return 0;
 
     let scopeSum = 0;
     let grandTotal = 0;
@@ -169,7 +186,7 @@ function getScopeTargetPercent(scopeName, year, mois) {
     scopeDeptTargets.forEach(t => {
         if (t.year.toString() !== year || t.mois !== mois) return;
         grandTotal += t.targetCount;
-        if (t.scopeId === scope.id) scopeSum += t.targetCount;
+        if (scopeIds.includes(t.scopeId)) scopeSum += t.targetCount;
     });
 
     return grandTotal > 0 ? Math.round(scopeSum / grandTotal * 100) : 0;
@@ -194,15 +211,15 @@ function updateKPIs() {
 function renderKaizenTable() {
     const data = getFilteredRows();
     const depNames = departements.map(d => d.nom);
-    const scopeNames = scopes.map(s => s.nom);
+    const scopeNames = getDisplayedScopeNames();
 
     const thead = document.getElementById("kaizenSuggThead");
     thead.innerHTML = `<tr>
         <th>Département</th>
         <th># Kaizens</th>
         <th># VAVE</th>
-        ${scopeNames.map(sc => `<th># Kaizen ${sc}</th>`).join("")}
         <th># A3</th>
+        ${scopeNames.map(sc => `<th># Kaizen ${sc}</th>`).join("")}
     </tr>`;
 
     const tbody = document.getElementById("kaizenSuggTbody");
@@ -219,7 +236,8 @@ function renderKaizenTable() {
         const vaveCount = rows.filter(r => normStr(r.improvementType) === normStr("TIE Kaizen")).length;
 
         const scopeCells = scopeNames.map(sc => {
-            const count = kaizenRows.filter(r => normStr(r.attackedLosses) === normStr(sc)).length;
+            const sourceNames = getMergedScopeSourceNames(sc);
+            const count = kaizenRows.filter(r => sourceNames.some(n => normStr(r.attackedLosses) === normStr(n))).length;
             scopeTotals[sc] += count;
             return `<td>${count}</td>`;
         }).join("");
@@ -233,8 +251,8 @@ function renderKaizenTable() {
             <td>${depName}</td>
             <td>${kaizenRows.length}</td>
             <td>${vaveCount}</td>
-            ${scopeCells}
             <td>${a3Count}</td>
+            ${scopeCells}
         `;
         tbody.appendChild(tr);
     });
@@ -245,8 +263,8 @@ function renderKaizenTable() {
         <td style="font-weight:700;">Total</td>
         <td style="font-weight:700;">${totalKaizens}</td>
         <td style="font-weight:700;">${totalVave}</td>
-        ${scopeNames.map(sc => `<td style="font-weight:700;">${scopeTotals[sc]}</td>`).join("")}
         <td style="font-weight:700;">${totalA3}</td>
+        ${scopeNames.map(sc => `<td style="font-weight:700;">${scopeTotals[sc]}</td>`).join("")}
     `;
     tbody.appendChild(totalRow);
 
@@ -256,11 +274,11 @@ function renderKaizenTable() {
         <td style="font-weight:700;">%</td>
         <td></td>
         <td></td>
+        <td></td>
         ${scopeNames.map(sc => {
         const pct = totalKaizens > 0 ? Math.round(scopeTotals[sc] / totalKaizens * 100) : 0;
         return `<td style="font-weight:700; color:#0d1b4c;">${pct}%</td>`;
     }).join("")}
-        <td></td>
     `;
     tbody.appendChild(pctRow);
 }
@@ -281,22 +299,28 @@ function renderScopeStatutCharts() {
     document.getElementById("scopeChartTitleGlobal").textContent = typeLabel + " par Scope";
     document.getElementById("statutChartTitleGlobal").textContent = typeLabel + " par Statut";
 
-    const scopeNames = scopes.map(s => s.nom);
+    const scopeNames = getDisplayedScopeNames();
     let scopeReal, scopeTarget;
 
     if (scopeChartMode === "count") {
-        scopeReal = scopeNames.map(name => data.filter(r => normStr(r.attackedLosses) === normStr(name)).length);
+        scopeReal = scopeNames.map(name => {
+            const sourceNames = getMergedScopeSourceNames(name);
+            return data.filter(r => sourceNames.some(n => normStr(r.attackedLosses) === normStr(n))).length;
+        });
         scopeTarget = scopeNames.map(name => {
-            const scopeObj = scopes.find(s => s.nom === name);
-            if (!scopeObj) return 0;
+            const scopeIds = getMergedScopeIds(name);
             let sum = 0;
             scopeDeptTargets.forEach(t => {
-                if (t.year.toString() === period.year && t.mois === period.mois && t.scopeId === scopeObj.id) sum += t.targetCount;
+                if (t.year.toString() === period.year && t.mois === period.mois && scopeIds.includes(t.scopeId)) sum += t.targetCount;
             });
             return sum;
         });
     } else {
-        scopeReal = scopeNames.map(name => total ? Math.round(data.filter(r => normStr(r.attackedLosses) === normStr(name)).length / total * 100) : 0);
+        scopeReal = scopeNames.map(name => {
+            const sourceNames = getMergedScopeSourceNames(name);
+            const count = data.filter(r => sourceNames.some(n => normStr(r.attackedLosses) === normStr(n))).length;
+            return total ? Math.round(count / total * 100) : 0;
+        });
         scopeTarget = scopeNames.map(name => getScopeTargetPercent(name, period.year, period.mois));
     }
     const scopeFormatter = scopeChartMode === "count" ? (v => v) : (v => v + "%");
@@ -318,11 +342,20 @@ function renderScopeStatutCharts() {
     });
 
     const delayLabels = ["No delayed", "Delayed"];
-    const delayReal = delayLabels.map(v => total ? Math.round(data.filter(r => normStr(r.delayStatus) === normStr(v)).length / total * 100) : 0);
+    let delayReal, delayTarget, statutFormatter;
 
-    const appliqueCount = getStatutTargetCount(period.year, period.mois);
-    const appliqueTargetPct = total > 0 ? Math.round(appliqueCount / total * 100) : 0;
-    const delayTarget = [appliqueTargetPct, 0];
+    if (statutChartMode === "count") {
+        delayReal = delayLabels.map(v => data.filter(r => normStr(r.delayStatus) === normStr(v)).length);
+        const appliqueCount = getStatutTargetCount(period.year, period.mois);
+        delayTarget = [appliqueCount, 0];
+        statutFormatter = v => v;
+    } else {
+        delayReal = delayLabels.map(v => total ? Math.round(data.filter(r => normStr(r.delayStatus) === normStr(v)).length / total * 100) : 0);
+        const appliqueCount = getStatutTargetCount(period.year, period.mois);
+        const appliqueTargetPct = total > 0 ? Math.round(appliqueCount / total * 100) : 0;
+        delayTarget = [appliqueTargetPct, 0];
+        statutFormatter = v => v + "%";
+    }
 
     destroyChart("statut");
     charts.statut = new Chart(document.getElementById("chartParStatut"), {
@@ -336,7 +369,7 @@ function renderScopeStatutCharts() {
         options: {
             maintainAspectRatio: false,
             scales: { y: { beginAtZero: true } },
-            plugins: { legend: { position: "bottom" }, datalabels: { anchor: "end", align: "top", color: "#333", font: { weight: "bold", size: 10 }, formatter: v => v + "%" } }
+            plugins: { legend: { position: "bottom" }, datalabels: { anchor: "end", align: "top", color: "#333", font: { weight: "bold", size: 10 }, formatter: statutFormatter } }
         }
     });
 }
@@ -379,14 +412,42 @@ function getCumulativeParticipationPct(data, depName, yearVal, moisValEn) {
     return Math.round(count / headcount * 100);
 }
 
+// Nombre de suggestions prévues (target) pour un département, selon les filtres
+// année/mois sélectionnés (gère "all" en sommant sur les mois/années concernés).
+function getTargetCountForFilters(depName, yearVal, moisValEn) {
+    const obj = departmentObjectives[depName];
+    if (!obj || !obj.monthlyTargets) return 0;
+
+    let sum = 0;
+    Object.entries(obj.monthlyTargets).forEach(([key, val]) => {
+        const sepIndex = key.indexOf("-");
+        const y = key.substring(0, sepIndex);
+        const mFr = key.substring(sepIndex + 1);
+        const moisEn = Object.keys(ENGLISH_TO_FRENCH_MOIS).find(k => ENGLISH_TO_FRENCH_MOIS[k] === mFr) || mFr;
+        const matchYear = yearVal === "all" || y === yearVal;
+        const matchMois = moisValEn === "all" || moisEn === moisValEn;
+        if (matchYear && matchMois) sum += (val || 0);
+    });
+    return sum;
+}
+
 function renderObjectifsChart() {
     const moisVal = document.getElementById("filterMoisGlobal").value;
     const yearVal = document.getElementById("filterAnneeGlobal").value;
     const data = getFilteredRows();
 
     const depNames = departements.map(d => d.nom);
-    const targetData = depNames.map(name => getObjectiveTarget(name, yearVal, moisVal));
-    const realData = depNames.map(name => getCumulativeParticipationPct(data, name, yearVal, moisVal));
+    let targetData, realData, formatter;
+
+    if (participationChartMode === "count") {
+        targetData = depNames.map(name => getTargetCountForFilters(name, yearVal, moisVal));
+        realData = depNames.map(name => data.filter(r => normDept(r.department) === normDept(name)).length);
+        formatter = v => v;
+    } else {
+        targetData = depNames.map(name => getObjectiveTarget(name, yearVal, moisVal));
+        realData = depNames.map(name => getCumulativeParticipationPct(data, name, yearVal, moisVal));
+        formatter = v => v + "%";
+    }
 
     destroyChart("objectifs");
     charts.objectifs = new Chart(document.getElementById("chartObjectifs"), {
@@ -400,7 +461,7 @@ function renderObjectifsChart() {
         options: {
             maintainAspectRatio: false,
             scales: { x: { ticks: { autoSkip: false, maxRotation: 45, minRotation: 45 } }, y: { beginAtZero: true } },
-            plugins: { legend: { position: "bottom" }, datalabels: { anchor: "end", align: "top", color: "#333", font: { weight: "bold", size: 10 }, formatter: v => v + "%" } }
+            plugins: { legend: { position: "bottom" }, datalabels: { anchor: "end", align: "top", color: "#333", font: { weight: "bold", size: 10 }, formatter } }
         }
     });
 }
@@ -765,6 +826,32 @@ document.getElementById("scopeModeCount")?.addEventListener("click", function ()
     this.classList.add("active");
     document.getElementById("scopeModePct").classList.remove("active");
     renderScopeStatutCharts();
+});
+
+document.getElementById("statutModePct")?.addEventListener("click", function () {
+    statutChartMode = "percent";
+    this.classList.add("active");
+    document.getElementById("statutModeCount").classList.remove("active");
+    renderScopeStatutCharts();
+});
+document.getElementById("statutModeCount")?.addEventListener("click", function () {
+    statutChartMode = "count";
+    this.classList.add("active");
+    document.getElementById("statutModePct").classList.remove("active");
+    renderScopeStatutCharts();
+});
+
+document.getElementById("participationModePct")?.addEventListener("click", function () {
+    participationChartMode = "percent";
+    this.classList.add("active");
+    document.getElementById("participationModeCount").classList.remove("active");
+    renderObjectifsChart();
+});
+document.getElementById("participationModeCount")?.addEventListener("click", function () {
+    participationChartMode = "count";
+    this.classList.add("active");
+    document.getElementById("participationModePct").classList.remove("active");
+    renderObjectifsChart();
 });
 
 ["filterTypeGlobal", "filterDelay", "filterCompletion", "filterPdca", "filterMoisGlobal", "filterAnneeGlobal"].forEach(id => {
